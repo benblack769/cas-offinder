@@ -68,9 +68,9 @@ void find_mismatches(std::vector<uint64_t> & genome, std::vector<uint64_t> & pat
         uint64_t prev = genome[i];
         uint64_t next = i+1 < genome.size() ? genome[i+1] : 0;
         for(size_t k = 0; k < blocks_avail; k++){
-            uint64_t cur = (prev << (k*4)) | (next >> ((blocks_avail - k)*4));
+            uint64_t cur = k == 0 ? prev : (prev << (k*4)) | (next >> ((blocks_avail - k)*4));
             for(size_t j = 0; j < pattern_blocks.size(); j++){
-                b4_counts[j][i*16+k] -= __builtin_popcountll(cur & pattern_blocks[j]);
+                b4_counts[j][i*blocks_avail+k] -= __builtin_popcountl(cur & pattern_blocks[j]);
             }
         }
     }
@@ -141,9 +141,9 @@ std::vector<std::vector<uint16_t>> find_mismatches(std::string genome,  std::vec
             for(int k = 0; k < pattern_size; k++){
                 if(!(genome[i+k] & patterns[j][k])){
                     mismatches[j][i] += 1;
-                    if(mismatches[j][i] > 5){
-                        break;
-                    }
+                    // if(mismatches[j][i] > 5){
+                    //     break;
+                    // }
                 }
             }
         }
@@ -184,7 +184,7 @@ TEST(find_mismatches_gold){
         //6, 6, 8, 4, 7, 8, 6, 7, 7, 7, 6, 7, 7, 8, 4, 9, 5, 4, 7, 9, 9, 0, 9, 9, 7, 5, 6, 8, 6,
         { 8, 6, 8, 4, 7, 8, 6, 7, 7, 7, 6, 7, 7, 8, 4, 9, 7, 4, 7, 9, 9, 0, 9, 9, 7, 5, 6, 8, 6, },
     };
-    std::vector<std::vector<uint16_t>> actual = find_mismatches(genome, patterns);
+    std::vector<std::vector<uint16_t>> actual = find_mismatches_packed(genome, patterns);
     for(auto & v : actual){
         for(uint16_t i : v){
             std::cout << i << ", ";
