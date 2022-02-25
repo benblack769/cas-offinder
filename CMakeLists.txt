@@ -36,62 +36,79 @@ set (HEADERS
     headers/parse_input.h
     headers/blockify.h
     headers/async_search.h
+    headers/bidirect_search.h
     headers/bulge_logic.h
     headers/opencl_executor.h
     headers/channel.h
     oclkernels.h
 )
-set(SOURCES
+add_library(genome_base_lib STATIC
     src/bit4ops.cpp
+    src/read_genome.cpp
+    src/bidirect_search.cpp
+    src/read_fasta.cpp
+    src/read_2bit.cpp
+    src/parse_input.cpp
+    src/blockify.cpp
+    src/bidirect_search.cpp
+    src/bulge_logic.cpp
+    ${HEADERS}
+    )
+target_link_libraries(genome_base_lib PUBLIC Threads::Threads)
+
+add_library(genome_search_lib STATIC
+    src/async_search.cpp
     src/search.cpp
     src/oclfunctions.cpp
-    src/read_genome.cpp
-    src/read_fasta.cpp
-    src/read_2bit.cpp
-    src/parse_input.cpp
-    src/blockify.cpp
-    src/async_search.cpp
-    src/bulge_logic.cpp
-)
+    ${HEADERS}
+    )
+target_link_libraries(genome_search_lib PUBLIC OpenCL)
+target_link_libraries(genome_search_lib PUBLIC genome_base_lib)
 
-set(NODEP_SOURCES
-    src/bit4ops.cpp
-    src/search_nodep.cpp
-    src/read_genome.cpp
-    src/read_fasta.cpp
-    src/read_2bit.cpp
-    src/parse_input.cpp
-    src/blockify.cpp
+add_library(genome_nocl_search_lib STATIC
     src/async_search.cpp
-    src/bulge_logic.cpp
-)
+    src/search_nodep.cpp
+    ${HEADERS}
+    )
+target_link_libraries(genome_nocl_search_lib PUBLIC genome_base_lib)
 
 add_executable (test
-    test/test.cpp
-    test/test_framework.cpp
-    test/test_framework.h
-    test/bit4ops.cpp
-    test/search.cpp
-    test/read_file.cpp
-    test/parse_input.cpp
-    test/blockify.cpp
-    test/bulge_logic.cpp
-    ${SOURCES} ${HEADERS}
+    src/test/test.cpp
+    src/test/test_framework.cpp
+    src/test/test_framework.h
+    src/test/bit4ops.cpp
+    src/test/search.cpp
+    src/test/read_file.cpp
+    src/test/parse_input.cpp
+    src/test/blockify.cpp
+    src/test/bulge_logic.cpp
+    src/test/async_search.cpp
+    src/test/bidirect_search.cpp
+    ${HEADERS}
 )
+target_link_libraries(test PUBLIC genome_nocl_search_lib )
+
 add_executable (cas-offinder-2
     src/main_v2.cpp
-    ${SOURCES} ${HEADERS}
+    ${HEADERS}
 )
+target_link_libraries(cas-offinder-2 PUBLIC genome_search_lib )
+
 add_executable (cas-offinder-2-nocl
     src/main_v2.cpp
-    ${NODEP_SOURCES} ${HEADERS}
+    ${HEADERS}
 )
+target_link_libraries(cas-offinder-2-nocl PUBLIC genome_nocl_search_lib )
+add_executable (cas-offinder-3-nocl
+ src/main_v3.cpp
+   ${HEADERS}
+   )
+target_link_libraries(cas-offinder-3-nocl PUBLIC genome_nocl_search_lib )
+add_executable (cas-offinder-3
+ src/main_v3.cpp
+   ${HEADERS}
+   )
+target_link_libraries(cas-offinder-3 PUBLIC genome_search_lib )
 
-target_link_libraries(cas-offinder-2 PUBLIC OpenCL)
-target_link_libraries(test PUBLIC OpenCL)
-target_link_libraries(cas-offinder-2 PUBLIC Threads::Threads)
-target_link_libraries(test PUBLIC Threads::Threads)
-target_link_libraries(cas-offinder-2-nocl PUBLIC Threads::Threads)
-
-target_compile_options(test PRIVATE -Wall -Wextra)
+target_compile_options(genome_base_lib PUBLIC -Wall -Wextra)
 

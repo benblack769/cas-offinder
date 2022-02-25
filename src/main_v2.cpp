@@ -1,5 +1,6 @@
 #include "RangeIterator.h"
 #include "async_search.h"
+#include "bidirect_search.h"
 #include "bit4ops.h"
 #include "blockify.h"
 #include "bulge_logic.h"
@@ -10,6 +11,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,46 +28,41 @@ static DeviceType get_dev_ty(char c)
     throw runtime_error(
       "not a valid device name, must be one of 'G', 'C', 'A'");
 }
-static ostream* out_str_ptr;
-static InFileInfo input;
-static string all_compares;
-static string pattern_str;
-static string rev_pattern_str;
+struct OutputDataV2
+{
+    ostream* out_str_ptr;
+    InFileInfo input;
+    string all_compares;
+    string pattern_str;
+};
 
-static bool matches(const char* dna, const char* rna, size_t size)
+static void async_callback(const GenomeMatch* gm, void* user_data)
 {
-    for (size_t i = 0; i < size; i++) {
-        if (!is_match(dna[i], rna[i])) {
-            return false;
-        }
-    }
-    return true;
-}
-bool fits_pattern(const GenomeMatch* gm)
-{
-    return gm->pattern_idx % 2 == 0
-             ? matches(gm->dna_match, pattern_str.data(), input.pattern_size)
-             : matches(
-                 gm->dna_match, rev_pattern_str.data(), input.pattern_size);
-}
-static void async_callback(const GenomeMatch* gm)
-{
-    if (!fits_pattern(gm)) {
+    OutputDataV2* data = (OutputDataV2*)(user_data);
+    ostream& outs = *data->out_str_ptr;
+    if (!fits_pattern(gm, data->pattern_str.data(), data->input.pattern_size)) {
         return;
     }
-    std::string rna = all_compares.substr(gm->pattern_idx * input.pattern_size,
-                                          input.pattern_size);
+    const char* compares = data->all_compares.data();
+    size_t pattern_size = data->input.pattern_size;
+    char dir = gm->pattern_idx % 2 ? '-' : '+';
+    std::string rna =
+      std::string(compares + gm->pattern_idx * pattern_size,
+                  compares + (gm->pattern_idx + 1) * pattern_size);
     std::string dna(gm->dna_match);
-    char dir = '+';
+
     if (gm->pattern_idx % 2 == 1) {
-        dna = reverse_compliment(dna);
-        rna = reverse_compliment(rna);
-        dir = '-';
+        i_reverse_compliment(rna.data(), rna.size());
+        i_reverse_compliment(dna.data(), dna.size());
     }
     indicate_mismatches_dna(dna, rna);
-    (*out_str_ptr) << rna << '\t' << gm->chrom_name << '\t' << gm->chrom_loc
-                   << '\t' << dna << '\t' << dir << '\t' << gm->mismatches
-                   << '\n';
+    outs << rna << '\t' << gm->chrom_name << '\t' << gm->chrom_loc << '\t'
+         << dna << '\t' << dir << '\t' << gm->mismatches;
+    if (data->input.ids) {
+        const char* idstr = data->input.ids[gm->pattern_idx / 2];
+        outs << '\t' << idstr;
+    }
+    outs << '\n';
 }
 
 int main(int argc, char** argv)
@@ -84,19 +81,18 @@ int main(int argc, char** argv)
 
     auto start = std::chrono::system_clock::now();
 
-    input = read_file(in_fname);
+    InFileInfo input = read_file(in_fname);
+    if (input.dna_bulges || input.rna_bulges) {
+        cerr << "dna bulges and rna bulges must be 0 for v2\n";
+        return 1;
+    }
     DeviceType device_ty = get_dev_ty(device_chr);
     ofstream out_file;
+    ostream* out_str_ptr;
 
-    for (size_t i : range(input.num_patterns)) {
-        string forward_cmp(input.compares + i * input.pattern_size,
-                           input.compares + (i + 1) * input.pattern_size);
-        string backward_cmp = reverse_compliment(forward_cmp);
-        all_compares += forward_cmp;
-        all_compares += backward_cmp;
-    }
-    pattern_str = string(input.pattern, input.pattern + input.pattern_size);
-    rev_pattern_str = reverse_compliment(pattern_str);
+    string all_compares =
+      mirror_pattern(input.compares, input.num_patterns, input.pattern_size);
+    string pattern_str = mirror_pattern(input.pattern, 1, input.pattern_size);
     if (strlen(out_fname) == 1 && out_fname[0] == '-') {
         out_str_ptr = &cout;
     } else {
@@ -104,21 +100,28 @@ int main(int argc, char** argv)
         out_str_ptr = &out_file;
     }
     //    *out_str_ptr <<
-    //    "RNA\tChromosome\tLocation\tDNA\tDirection\tMismatches\n";
-
+    //    "RNA\tChromosome\tLocation\tDNA\tDirection\tMismatches\tID\n";
+    OutputDataV2 out_data{
+        .out_str_ptr = out_str_ptr,
+        .input = input,
+        .all_compares = all_compares,
+        .pattern_str = pattern_str,
+    };
     async_search(input.genome_path,
                  device_ty,
                  all_compares.data(),
                  input.pattern_size,
                  input.num_patterns * 2,
                  input.mismatches,
+                 nullptr,
+                 &out_data,
                  async_callback);
 
     auto end = std::chrono::system_clock::now();
     auto duration = (end - start);
     auto micros =
       std::chrono::duration_cast<std::chrono::microseconds>(duration);
-    cerr << "successfully finished in: " << micros.count() / double(1000000)
+    cerr << "successfully finished in: " << micros.count() / 1000000.
          << " seconds\n";
     return 0;
 }
