@@ -165,7 +165,7 @@ inline CL_NDRange div_nd(CL_NDRange range, CL_NDRange divisor)
 }
 class CLKernel
 {
-  protected:
+  public:
     cl_command_queue myqueue;
     cl_program program;
     cl_kernel kern;
@@ -228,7 +228,7 @@ class CLKernel
 
 class OpenCLExecutor
 {
-  protected:
+  public:
     std::string source;
     cl_platform_id platform;
     cl_device_id device;

@@ -30,6 +30,8 @@ struct Searcher
     CLBuffer<Match> match_buf;
     CLBuffer<uint32_t> count_buf;
     CLKernel search;
+    size_t work_group_size;
+    bool is_cpu;
 };
 cl_device_type to_dev_ty(DeviceType ty)
 {
@@ -82,10 +84,10 @@ Searcher* create_searcher(SearchFactory* fact,
     cl_device_type dev_type;
     oclGetDeviceInfo(
       temp.device, CL_DEVICE_TYPE, sizeof(dev_type), &dev_type, NULL);
-    bool is_cpu = dev_type == CL_DEVICE_TYPE_CPU;
+    searcher->is_cpu = dev_type == CL_DEVICE_TYPE_CPU;
 
     string defs = "-Dpattern_size=" + to_string(pattern_size);
-    if (!is_cpu) {
+    if (!searcher->is_cpu) {
         searcher->block_size = 4;
         defs += " -Dblock_ty=uint32_t";
     } else {
@@ -113,6 +115,16 @@ Searcher* create_searcher(SearchFactory* fact,
     searcher->count_buf = searcher->executor.new_clbuffer<uint32_t>(1);
     searcher->search = searcher->executor.new_clkernel("find_matches");
 
+    size_t group_size = 0;
+    oclGetKernelWorkGroupInfo(searcher->search.kern,
+                              searcher->executor.device,
+                              CL_KERNEL_WORK_GROUP_SIZE,
+                              sizeof(group_size),
+                              &group_size,
+                              nullptr);
+
+    searcher->work_group_size = searcher->is_cpu ? 1 : group_size;
+
     searcher->pattern_buf.write_buffer(padded_patterns);
 
     return searcher;
@@ -137,8 +149,9 @@ void search(Searcher* searcher,
     searcher->count_buf.clear_buffer();
     size_t num_pattern_blocks = num_blocks(searcher, searcher->pattern_size);
     size_t num_genome_blocks =
-      num_blocks(searcher, genome_size) + 1 - num_pattern_blocks;
+      num_blocks(searcher, genome_size);// + 1 - num_pattern_blocks;
     size_t num_patterns = searcher->num_patterns;
+    std::cout << num_genome_blocks << " " << searcher->work_group_size << "\n";
     searcher->search.run(
       CL_NDRange(num_genome_blocks, num_patterns), CL_NDRange(), CL_NDRange());
     cl_uint count;

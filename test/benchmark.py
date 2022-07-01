@@ -44,10 +44,10 @@ def build_benchmark_table():
     guide_lengths = [20, 25]
     mismatches_options = [3, 6]
     pams = ["NRG", "NNGRRT", 'TTTN']
-    devices = ['G','C']
+    devices = ['C','G']
     num_guides_list = [1,100]
     binaries = ["./build/cas-offinder-2", "./bin/cas-offinder-2"]
-    print("Device | Num Guides | Mismatches | PAM | Guide Length | cas-offinder 2.4.1 | new code ", flush=True)
+    print("Device | Num Guides | Mismatches | PAM | Guide Length | new code |  cas-offinder 2.4.1 ", flush=True)
     print("--- | --- | --- | --- | --- | --- | --- ", flush=True)
     for device in devices:
         for num_guides in num_guides_list:

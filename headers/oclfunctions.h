@@ -65,6 +65,14 @@ void oclGetDeviceInfo(cl_device_id device,
                       void* param_value,
                       size_t* param_value_size_ret);
 
+void oclGetKernelWorkGroupInfo (
+    cl_kernel kernel,
+    cl_device_id device,
+    cl_kernel_work_group_info param_name,
+    size_t param_value_size,
+    void *param_value,
+    size_t *param_value_size_ret);
+
 void oclReleaseKernel(cl_kernel kernel);
 
 void oclReleaseProgram(cl_program program);
